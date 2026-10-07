@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Google PageRank Mini Project</title>
+<style>
+:root{--bg:#f6f8fb;--card:#fff;--tx:#1b2430;--mut:#5a6778;--pri:#2457c5;--bd:#d5dce6;--note:#eaf1ff;--hi:#e0f5e6;--err:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171f;--card:#1b222d;--tx:#e8edf4;--mut:#9aa7b8;--pri:#6c9bff;--bd:#33405a;--note:#1f2c47;--hi:#17372a;--err:#ff8a80}}
+:root[data-theme="dark"]{--bg:#12171f;--card:#1b222d;--tx:#e8edf4;--mut:#9aa7b8;--pri:#6c9bff;--bd:#33405a;--note:#1f2c47;--hi:#17372a;--err:#ff8a80}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;font-size:18px;line-height:1.5}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:1.7rem;margin:.2em 0}h2{font-size:1.25rem;margin:0 0 .5em}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin:14px 0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.row3{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+@media(max-width:700px){.row,.row3{grid-template-columns:1fr}}
+label{display:block;font-weight:600;margin:10px 0 4px}
+input,textarea{width:100%;font-size:1.05rem;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)}
+button{font-size:1.05rem;padding:12px 18px;margin:10px 8px 0 0;border:0;border-radius:8px;background:var(--pri);color:#fff;cursor:pointer;font-weight:600}
+button.sec{background:transparent;color:var(--pri);border:2px solid var(--pri)}
+.note{background:var(--note);border-radius:8px;padding:10px 12px;font-size:.95rem}
+.msg{color:var(--err);font-weight:600;margin-top:8px}
+.warn{color:var(--mut);font-size:.95rem;margin-top:6px}
+.sc{overflow-x:auto}
+table{border-collapse:collapse;margin:6px 0}
+td,th{border:1px solid var(--bd);padding:6px 10px;text-align:center;font-variant-numeric:tabular-nums}
+th{background:var(--note)}
+.bar{display:flex;align-items:center;gap:8px;margin:6px 0}
+.bar .l{width:64px;flex:none}.bar .t{flex:1;background:var(--bd);border-radius:6px;height:26px}
+.bar .f{height:100%;background:var(--pri);border-radius:6px}.bar.top .f{background:#2e9e5b}
+.bar .v{width:70px;flex:none;text-align:right}
+.win{background:var(--hi);border-radius:8px;padding:10px 12px;font-weight:700;margin-top:8px}
+.flow{text-align:center;line-height:1.7}.flow b{display:inline-block;border:2px solid var(--pri);border-radius:8px;padding:2px 14px}
+svg{width:100%;max-width:340px;display:block;margin:0 auto}
+#res{display:none}
+</style></head><body><main>
+<h1>Google PageRank Mini Project</h1>
+<p style="color:var(--mut);margin-top:0">Ranking webpages using links, eigenvalues, eigenvectors and Power Iteration.</p>
+
+<section class="card"><h2>1. Input</h2>
+<div class="row"><div>
+<label for="n">Number of pages (2 to 6)</label><input id="n" type="number" value="3" min="2" max="6">
+<label for="lk">Links (example: 1->2, 1->3, 2->3, 3->1)</label>
+<textarea id="lk" rows="3" placeholder="1->2, 1->3, 2->3, 3->1"></textarea>
+<label for="d">Damping factor d (0 to 0.99)</label><input id="d" type="number" step="0.01" value="0.85">
+<label for="it">Number of iterations (1 to 100)</label><input id="it" type="number" value="20">
+<button id="calc">Calculate PageRank</button><button class="sec" id="reset">Reset</button><button class="sec" id="test">Load Test Case</button>
+<div class="msg" id="err"></div><div class="warn" id="warn"></div>
+</div><div><svg id="graph" viewBox="0 0 320 300"></svg>
+<div class="note">Circles are webpages. An arrow A → B means page A links to page B. This picture updates as you type.</div></div></div>
+</section>
+
+<div id="res">
+<section class="card"><h2>2. Link Matrix A</h2><div class="row3"><div class="sc" id="mA"></div>
+<div class="note">Link Matrix A represents which webpage links to which. Column j is the page that has the link, row i is the page it points to. A 1 means "there is a link".</div></div></section>
+
+<section class="card"><h2>3. Transition Matrix P</h2><div class="row3"><div class="sc" id="mP"></div>
+<div class="note">Transition Matrix P represents the probability of moving from one page to another. Each column of A is divided by its sum, so every column adds up to 1.<div id="dang" style="margin-top:6px"></div>
+<b>Dangling pages</b> (no outgoing links) would give a column of zeros, so we replace that column by 1/n in every entry (a random jump to any page).</div></div></section>
+
+<section class="card"><h2>4. Google Matrix G</h2><div class="row3"><div class="sc" id="mG"></div>
+<div class="note">G = d·P + (1−d)/n, where d is the damping factor and n the number of pages. The (1−d)/n part is added to every entry (random surfing). All columns of G add up to 1.</div></div></section>
+
+<section class="card"><h2>5. Power Iteration calculation</h2><div class="row3"><div class="sc" id="pw"></div>
+<div class="note">Power Iteration repeatedly multiplies the Google Matrix by the rank vector until the values become stable. We start with r0 = [1/n, ..., 1/n] and compute r(k+1) = G · r(k).<div id="stop" style="margin-top:6px"></div></div></div></section>
+
+<section class="card"><h2>6. Eigenvalues of G</h2><div class="row3"><div class="sc" id="ev"></div>
+<div class="note">An eigenvalue λ and eigenvector v satisfy G·v = λ·v. G is a column-stochastic matrix, so its largest eigenvalue is 1. The eigenvalues are found numerically (roots of the characteristic polynomial). Some may be complex numbers.</div></div></section>
+
+<section class="card"><h2>7. Eigenvector for eigenvalue 1</h2><div class="row3"><div class="sc" id="evec"></div>
+<div class="note">An eigenvector corresponding to eigenvalue 1 gives the stable PageRank vector. We solve (G − I)v = 0 numerically and scale v so its values add up to 1.</div></div></section>
+
+<section class="card"><h2>8. Final PageRank</h2><div class="row3"><div><div id="bars"></div><div id="sum" class="warn"></div></div>
+<div class="note">Bigger bar = more important page. Expected behavior: the PageRank values should add up to approximately 1, and the Power Iteration result should be close to the eigenvector result.<div id="cmp" style="margin-top:6px;font-weight:600"></div></div></div></section>
+
+<section class="card"><h2>9. Highest-ranked page</h2><div class="win" id="top"></div></section>
+</div>
+
+<section class="card"><h2>How it works</h2><div class="flow"><b>Webpage Links</b><br>↓<br><b>Link Matrix</b><br>↓<br><b>Transition Matrix</b><br>↓<br><b>Google Matrix</b><br>↓<br><b>Power Iteration</b><br>↓<br><b>PageRank</b></div></section>
+<section class="card"><h2>Project Summary</h2><p style="font-size:1rem;margin:0">Google PageRank uses matrix mathematics to measure the importance of webpages. In this project, Power Iteration finds the stable PageRank vector, while eigenvalues and eigenvectors explain the mathematical basis of the result.</p></section>
+</main>
+<script>
+var $=function(i){return document.getElementById(i)};
+function f(x){var s=(isFinite(x)?x:0).toFixed(4);return s.replace(/^-0\.0000$/,"0.0000")}
+function cf(z){var r=f(z[0]),i=f(Math.abs(z[1]));if(Math.abs(z[1])<1e-9)return r;return r+(z[1]<0?" − ":" + ")+i+"i"}
+
+// ---- reading the inputs ----
+function parseLinks(text,n){
+  var ok=[],bad=[],seen={};
+  text.split(/[,;\n]+/).forEach(function(s){
+    s=s.trim();if(!s)return;
+    var m=s.match(/^(\d+)\s*(?:->|→|-|>)\s*(\d+)$/);
+    if(!m){bad.push('"'+s+'" is not in the form 1->2');return}
+    var a=+m[1],b=+m[2];
+    if(a<1||a>n||b<1||b>n){bad.push('"'+s+'" uses a page number outside 1 to '+n);return}
+    if(a===b){bad.push('"'+s+'" links a page to itself (ignored)');return}
+    var k=a+">"+b;if(seen[k]){bad.push('"'+s+'" is repeated (counted once)');return}
+    seen[k]=1;ok.push([a-1,b-1]);
+  });
+  return {links:ok,bad:bad};
+}
+function readInputs(){
+  var n=Number($("n").value);
+  if(!Number.isInteger(n)||n<2||n>6)return {error:"Number of pages must be a whole number from 2 to 6."};
+  var d=Number($("d").value);
+  if($("d").value.trim()===""||!isFinite(d)||d<0||d>=1)return {error:"Damping factor must be a number from 0 to 0.99."};
+  var it=Number($("it").value);
+  if(!Number.isInteger(it)||it<1||it>100)return {error:"Iterations must be a whole number from 1 to 100."};
+  var p=parseLinks($("lk").value,n);
+  return {n:n,d:d,it:it,links:p.links,bad:p.bad};
+}
+
+// ---- matrix helpers ----
+function zeros(n){var M=[];for(var i=0;i<n;i++)M.push(new Array(n).fill(0));return M}
+function mul(A,B){var n=A.length,C=zeros(n);for(var i=0;i<n;i++)for(var j=0;j<n;j++){var s=0;for(var k=0;k<n;k++)s+=A[i][k]*B[k][j];C[i][j]=s}return C}
+function mulv(A,v){return A.map(function(r){var s=0;for(var j=0;j<r.length;j++)s+=r[j]*v[j];return s})}
+function matHTML(M,fmt){
+  var n=M.length,h="<table><tr><th></th>";
+  for(var j=0;j<n;j++)h+="<th>P"+(j+1)+"</th>";h+="</tr>";
+  for(var i=0;i<n;i++){h+="<tr><th>P"+(i+1)+"</th>";for(var j=0;j<n;j++)h+="<td>"+fmt(M[i][j])+"</td>";h+="</tr>"}
+  return h+"</table>";
+}
+
+// ---- eigenvalues: characteristic polynomial + Durand-Kerner root finding ----
+function charPoly(A){
+  var n=A.length,c=new Array(n+1).fill(0);c[n]=1;var M=zeros(n);
+  for(var k=1;k<=n;k++){
+    var AM=mul(A,M);for(var i=0;i<n;i++)AM[i][i]+=c[n-k+1];M=AM;
+    var AM2=mul(A,M),tr=0;for(var i2=0;i2<n;i2++)tr+=AM2[i2][i2];
+    c[n-k]=-tr/k;
+  }
+  return c;
+}
+function cmul(a,b){return [a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]]}
+function cdiv(a,b){var d=b[0]*b[0]+b[1]*b[1];return [(a[0]*b[0]+a[1]*b[1])/d,(a[1]*b[0]-a[0]*b[1])/d]}
+function eigenvalues(G){
+  var c=charPoly(G),n=G.length,z=[],base=[0.4,0.9];
+  var cur=[1,0];for(var i=0;i<n;i++){z.push(cur);cur=cmul(cur,base)}
+  function p(x){var r=[0,0];for(var k=n;k>=0;k--){r=cmul(r,x);r[0]+=c[k]}return r}
+  for(var t=0;t<500;t++){
+    for(var i2=0;i2<n;i2++){
+      var den=[1,0];
+      for(var j=0;j<n;j++)if(j!==i2)den=cmul(den,[z[i2][0]-z[j][0],z[i2][1]-z[j][1]]);
+      if(den[0]===0&&den[1]===0)den=[1e-12,0];
+      var q=cdiv(p(z[i2]),den);z[i2]=[z[i2][0]-q[0],z[i2][1]-q[1]];
+    }
+  }
+  z=z.map(function(w){return [w[0],Math.abs(w[1])<1e-9?0:w[1]]});
+  z.sort(function(a,b){return Math.hypot(b[0],b[1])-Math.hypot(a[0],a[1])});
+  return z;
+}
+// eigenvector for eigenvalue 1: solve (G-I)v=0 with extra condition sum(v)=1
+function eigenvector1(G){
+  var n=G.length,M=[];
+  for(var i=0;i<n;i++){var r=G[i].slice();r[i]-=1;r.push(0);M.push(r)}
+  M[n-1]=new Array(n).fill(1);M[n-1].push(1);
+  for(var c=0;c<n;c++){
+    var pv=c;for(var r2=c+1;r2<n;r2++)if(Math.abs(M[r2][c])>Math.abs(M[pv][c]))pv=r2;
+    if(Math.abs(M[pv][c])<1e-12)return null;
+    var tmp=M[c];M[c]=M[pv];M[pv]=tmp;
+    for(var r3=0;r3<n;r3++)if(r3!==c){var fct=M[r3][c]/M[c][c];for(var k=c;k<=n;k++)M[r3][k]-=fct*M[c][k]}
+  }
+  var v=[],s=0;for(var i3=0;i3<n;i3++){v.push(M[i3][n]/M[i3][i3]);s+=v[i3]}
+  if(!isFinite(s)||Math.abs(s)<1e-12)return null;
+  return v.map(function(x){return x/s});
+}
+
+// ---- drawing the web graph ----
+function drawGraph(n,links){
+  var R=24,cx=160,cy=150,rad=105,pts=[],h='<defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--mut)"/></marker></defs>';
+  for(var i=0;i<n;i++){var a=-Math.PI/2+2*Math.PI*i/n;pts.push([cx+rad*Math.cos(a),cy+rad*Math.sin(a)])}
+  links.forEach(function(l){
+    var p=pts[l[0]],q=pts[l[1]],dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy)||1;
+    var c=[(p[0]+q[0])/2-dy/L*22,(p[1]+q[1])/2+dx/L*22];
+    var u1=Math.hypot(c[0]-p[0],c[1]-p[1])||1,u2=Math.hypot(q[0]-c[0],q[1]-c[1])||1;
+    var s=[p[0]+(c[0]-p[0])/u1*R,p[1]+(c[1]-p[1])/u1*R],e=[q[0]-(q[0]-c[0])/u2*(R+2),q[1]-(q[1]-c[1])/u2*(R+2)];
+    h+='<path d="M'+s[0]+','+s[1]+' Q'+c[0]+','+c[1]+' '+e[0]+','+e[1]+'" fill="none" stroke="var(--mut)" stroke-width="2" marker-end="url(#ah)"/>';
+  });
+  pts.forEach(function(p,i){h+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+R+'" fill="var(--note)" stroke="var(--pri)" stroke-width="2.5"/><text x="'+p[0]+'" y="'+(p[1]+5)+'" text-anchor="middle" font-size="15" font-weight="700" fill="var(--tx)">P'+(i+1)+'</text>'});
+  $("graph").innerHTML=h;
+}
+function liveGraph(){
+  var n=Number($("n").value);if(!Number.isInteger(n)||n<2||n>6){$("graph").innerHTML="";return}
+  drawGraph(n,parseLinks($("lk").value,n).links);
+}
+
+// ---- main calculation ----
+function calculate(){
+  $("err").textContent="";$("warn").textContent="";
+  var inp=readInputs();
+  if(inp.error){$("err").textContent=inp.error;$("res").style.display="none";return}
+  var n=inp.n,d=inp.d,maxIt=inp.it;
+  if(inp.bad.length)$("warn").textContent="Ignored: "+inp.bad.join("; ")+".";
+  drawGraph(n,inp.links);
+  // Step 1: link matrix A (A[i][j]=1 if page j links to page i)
+  var A=zeros(n);inp.links.forEach(function(l){A[l[1]][l[0]]=1});
+  // Step 2 + 3: transition matrix P with dangling fix
+  var P=zeros(n),dang=[];
+  for(var j=0;j<n;j++){
+    var s=0;for(var i=0;i<n;i++)s+=A[i][j];
+    if(s===0){dang.push(j+1);for(var i2=0;i2<n;i2++)P[i2][j]=1/n}
+    else for(var i3=0;i3<n;i3++)P[i3][j]=A[i3][j]/s;
+  }
+  // Step 4: Google matrix
+  var G=zeros(n);for(var a=0;a<n;a++)for(var b=0;b<n;b++)G[a][b]=d*P[a][b]+(1-d)/n;
+  // Step 5: power iteration
+  var r=new Array(n).fill(1/n),hist=[r.slice()],stable=false;
+  for(var k=0;k<maxIt;k++){
+    var nr=mulv(G,r),diff=0;
+    for(var q=0;q<n;q++)diff=Math.max(diff,Math.abs(nr[q]-r[q]));
+    r=nr;hist.push(r.slice());
+    if(diff<1e-10){stable=true;break}
+  }
+  // Step 6: eigen
+  var ev=eigenvalues(G),vec=eigenvector1(G);
+
+  $("mA").innerHTML=matHTML(A,function(x){return x});
+  $("mP").innerHTML=matHTML(P,f);
+  $("dang").innerHTML=dang.length?"Dangling page(s) found: "+dang.map(function(x){return "Page "+x}).join(", ")+".":"No dangling pages in this input.";
+  $("mG").innerHTML=matHTML(G,f);
+  var h="<table><tr><th>Step</th>";for(var c=0;c<n;c++)h+="<th>Page "+(c+1)+"</th>";h+="<th>Sum</th></tr>";
+  hist.forEach(function(v,idx){
+    var lab=idx===0?"Iteration 0":"Iteration "+idx,last=idx===hist.length-1&&idx>0;
+    var sm=v.reduce(function(x,y){return x+y},0);
+    h+="<tr><td>"+lab+(last?" (final)":"")+"</td>";v.forEach(function(x){h+="<td>"+f(x)+"</td>"});h+="<td>"+f(sm)+"</td></tr>";
+  });
+  $("pw").innerHTML="<div style='max-height:380px;overflow:auto'>"+h+"</table></div>";
+  $("stop").textContent=stable?"Stopped early after "+(hist.length-1)+" iterations because the values became stable.":"Stopped after "+(hist.length-1)+" iterations (the number you selected).";
+  var eh="<table><tr><th>#</th><th>Eigenvalue λ</th><th>|λ|</th></tr>";
+  ev.forEach(function(z,idx){eh+="<tr><td>"+(idx+1)+"</td><td>"+cf(z)+"</td><td>"+f(Math.hypot(z[0],z[1]))+"</td></tr>"});
+  $("ev").innerHTML=eh+"</table>";
+  if(vec){
+    var vh="<table><tr><th>Page</th><th>Eigenvector (sum = 1)</th></tr>";
+    vec.forEach(function(x,idx){vh+="<tr><td>Page "+(idx+1)+"</td><td>"+f(x)+"</td></tr>"});
+    $("evec").innerHTML=vh+"</table>";
+  }else $("evec").innerHTML="<div class='msg'>Could not compute the eigenvector for these inputs.</div>";
+
+  var mx=Math.max.apply(null,r),bh="";
+  r.forEach(function(x,idx){
+    var top=Math.abs(x-mx)<1e-9;
+    bh+='<div class="bar'+(top?" top":"")+'"><span class="l">Page '+(idx+1)+'</span><span class="t"><div class="f" style="width:'+(mx>0?x/mx*100:0)+'%"></div></span><span class="v">'+f(x)+'</span></div>';
+  });
+  $("bars").innerHTML=bh;
+  var tot=r.reduce(function(x,y){return x+y},0);
+  $("sum").textContent="Sum of PageRank values = "+f(tot);
+  if(vec){var md=0;for(var m=0;m<n;m++)md=Math.max(md,Math.abs(vec[m]-r[m]));
+    $("cmp").textContent="Largest difference between Power Iteration and eigenvector = "+f(md)+(md<0.001?" (very close ✓)":" (try more iterations)");
+  }else $("cmp").textContent="";
+  var tops=[];r.forEach(function(x,idx){if(Math.abs(x-mx)<1e-9)tops.push("Page "+(idx+1))});
+  $("top").textContent=(tops.length>1?"Tie: ":"")+tops.join(" and ")+" ("+f(mx)+")";
+  $("res").style.display="block";
+  $("res").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function reset(){
+  $("n").value=3;$("lk").value="";$("d").value=0.85;$("it").value=20;
+  $("err").textContent="";$("warn").textContent="";$("res").style.display="none";liveGraph();
+}
+function loadTest(){$("n").value=3;$("lk").value="1->2, 1->3, 2->3, 3->1";$("d").value=0.85;$("it").value=20;calculate()}
+$("calc").onclick=calculate;$("reset").onclick=reset;$("test").onclick=loadTest;
+$("lk").oninput=liveGraph;$("n").oninput=liveGraph;
+liveGraph();
+</script></body></html>
